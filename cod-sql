@@ -1,0 +1,36 @@
+select first_mth
+     , mth
+     , cnt_student
+     , count(f.cnt_st_missed_w) cnt_st_missed_w
+     , count(f.cnt_st_missed_w)::float / cnt_student as ratio
+from (select student_id
+            , first_mth
+            , mth
+            , count(student_id) over (partition by mth) as cnt_student
+            , sum (case when sum_missed_w_by_user >0 then 1 end) over (partition by student_id) as cnt_st_missed_w
+        from (select student_id
+                   , first_mth
+                   , mth
+                   , sum(case when nmb_week=nmb_week_next-2 then 1 else 0 end) sum_missed_w_by_user
+              from (select *
+                         , lead (nmb_week) over (partition by student_id order by nmb_week) nmb_week_next
+                         , min(t.mth) over (partition by student_id) as first_mth
+                    from (select student_id
+                                 , count(lesson_day) cnt_lesson
+                                 , date_trunc ('month', lesson_day) as mth
+                                 , date_part ('week', lesson_day) as nmb_week
+                          from test_lessons
+                          group by 4, 1, 3
+                          order by 1, 3, 4
+                          ) t 
+                    group by 1, 4, 3, 2
+                    order by 1, 3, 4 
+                    ) r
+               group by 1, 2, 3
+               order by 2, 3, 1 
+               ) s
+        group by 1, 2, 3, s.sum_missed_w_by_user
+        order by 2, 3, 1
+     )f   
+group by 1, 2, 3
+order by 1, 2, 3
